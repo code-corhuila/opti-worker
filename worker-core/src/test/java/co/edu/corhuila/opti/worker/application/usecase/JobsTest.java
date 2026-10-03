@@ -11,6 +11,7 @@ import java.time.Period;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,9 @@ import org.junit.jupiter.api.Test;
 import co.edu.corhuila.opti.worker.application.port.in.Deadline;
 import co.edu.corhuila.opti.worker.application.port.in.JobResult;
 import co.edu.corhuila.opti.worker.application.port.out.PatientsApi;
+import co.edu.corhuila.opti.worker.application.port.out.SalesReportsApi;
+import co.edu.corhuila.opti.worker.application.port.out.SellersApi;
+import co.edu.corhuila.opti.worker.application.port.out.SellersApi.SellerGoal;
 import co.edu.corhuila.opti.worker.application.port.out.StaleOrders;
 
 /** Rules every job of the worker must keep: bounded batch, one failure never stops the rest, time limit. */
@@ -128,6 +132,45 @@ class JobsTest {
         assertThatThrownBy(() -> new JobResult(-1, 0)).isInstanceOf(IllegalArgumentException.class);
     }
 
+    // ---- check-sales-goals ------------------------------------------------------------------
+
+    @Test
+    void aSellerAtOrAboveGoalIsNotifiedOnce() {
+        UUID seller = ids(1).get(0);
+        var sellers = new FakeSellers(List.of(new SellerGoal(seller, 100_000L)));
+        var sales = new FakeSalesReports(Map.of(seller, 150_000L));
+
+        JobResult result = new CheckSalesGoals(sellers, sales, clock, 50).run(Deadline.in(Duration.ofMinutes(1), clock));
+
+        assertThat(result).isEqualTo(new JobResult(1, 0));
+        assertThat(sellers.notified).containsExactly(seller);
+        assertThat(sellers.lastKey).startsWith("sales-goal:" + seller + ":");
+    }
+
+    @Test
+    void aSellerBelowGoalIsNotNotified() {
+        UUID seller = ids(1).get(0);
+        var sellers = new FakeSellers(List.of(new SellerGoal(seller, 100_000L)));
+        var sales = new FakeSalesReports(Map.of(seller, 50_000L));
+
+        new CheckSalesGoals(sellers, sales, clock, 50).run(Deadline.in(Duration.ofMinutes(1), clock));
+
+        assertThat(sellers.notified).isEmpty();
+    }
+
+    @Test
+    void oneFailingSellerIsCountedAndTheRestAreChecked() {
+        var sellerIds = ids(2);
+        var sellers = new FakeSellers(List.of(new SellerGoal(sellerIds.get(0), 100L), new SellerGoal(sellerIds.get(1), 100L)));
+        var sales = new FakeSalesReports(Map.of(sellerIds.get(0), 200L, sellerIds.get(1), 200L));
+        sales.failOn = sellerIds.get(0);
+
+        JobResult result = new CheckSalesGoals(sellers, sales, clock, 50).run(Deadline.in(Duration.ofMinutes(1), clock));
+
+        assertThat(result).isEqualTo(new JobResult(1, 1));
+        assertThat(sellers.notified).containsExactly(sellerIds.get(1));
+    }
+
     // ---- fakes ----------------------------------------------------------------------------
 
     private static List<UUID> ids(int count) {
@@ -222,6 +265,44 @@ class JobsTest {
                 throw new IllegalStateException("flag failed");
             }
             flagged.add(patientId);
+        }
+    }
+
+    private static final class FakeSellers implements SellersApi {
+        final List<SellerGoal> goals;
+        final List<UUID> notified = new ArrayList<>();
+        String lastKey;
+
+        FakeSellers(List<SellerGoal> goals) {
+            this.goals = goals;
+        }
+
+        @Override
+        public List<SellerGoal> withSalesGoal(int limit) {
+            return goals;
+        }
+
+        @Override
+        public void notify(UUID sellerId, String message, String idempotencyKey) {
+            notified.add(sellerId);
+            lastKey = idempotencyKey;
+        }
+    }
+
+    private static final class FakeSalesReports implements SalesReportsApi {
+        final Map<UUID, Long> revenue;
+        UUID failOn;
+
+        FakeSalesReports(Map<UUID, Long> revenue) {
+            this.revenue = revenue;
+        }
+
+        @Override
+        public long revenueSince(UUID sellerId, Instant periodStart) {
+            if (sellerId.equals(failOn)) {
+                throw new IllegalStateException("sales is down");
+            }
+            return revenue.getOrDefault(sellerId, 0L);
         }
     }
 }

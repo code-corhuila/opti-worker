@@ -12,10 +12,10 @@ import java.util.function.Function;
  * Every setting and limit of the worker, read from the environment and validated at start: a bad
  * value stops the process with a message that names the variable, instead of failing at 3 a.m.
  */
-public record WorkerConfig(String customersUrl, String salesUrl, String workflowUrl, String serviceToken,
-                           Duration expireEvery, Duration quotationMaxAge, Duration controlsEvery,
-                           Period controlMaxAge, int batchSize, Duration runTimeout, Duration httpTimeout,
-                           int httpAttempts, int healthPort) {
+public record WorkerConfig(String customersUrl, String salesUrl, String workflowUrl, String authUrl,
+                           String serviceToken, Duration expireEvery, Duration quotationMaxAge,
+                           Duration controlsEvery, Period controlMaxAge, Duration salesGoalsEvery, int batchSize,
+                           Duration runTimeout, Duration httpTimeout, int httpAttempts, int healthPort) {
 
     private static final int MAX_BATCH = 100;
 
@@ -27,11 +27,14 @@ public record WorkerConfig(String customersUrl, String salesUrl, String workflow
         String customers = read.text("CUSTOMERS_API_URL", null);
         String sales = read.text("SALES_API_URL", null);
         String workflow = read.text("WORKFLOW_URL", null);
+        String auth = read.text("AUTH_API_URL", null);
         String token = read.text("SERVICE_TOKEN", null);
         Duration expireEvery = read.duration("EXPIRE_EVERY", "PT10M", Duration.ofMinutes(1), Duration.ofDays(1));
         Duration maxAge = read.duration("PENDING_TTL", "P3D", Duration.ofHours(1), Duration.ofDays(60));
         Duration controlsEvery = read.duration("CONTROLS_EVERY", "PT6H", Duration.ofMinutes(1), Duration.ofDays(7));
         Period controlAge = read.period("CONTROL_MAX_AGE", "P12M");
+        Duration salesGoalsEvery = read.duration("SALES_GOALS_EVERY", "PT1H", Duration.ofMinutes(1),
+                Duration.ofDays(1));
         int batch = read.integer("BATCH_SIZE", 50, 1, MAX_BATCH);
         Duration runTimeout = read.duration("RUN_TIMEOUT", "PT2M", Duration.ofSeconds(5), Duration.ofHours(1));
         Duration httpTimeout = read.duration("HTTP_TIMEOUT", "PT5S", Duration.ofMillis(200), Duration.ofMinutes(1));
@@ -41,8 +44,8 @@ public record WorkerConfig(String customersUrl, String salesUrl, String workflow
         if (!problems.isEmpty()) {
             throw new IllegalStateException("invalid worker configuration:\n - " + String.join("\n - ", problems));
         }
-        return new WorkerConfig(customers, sales, workflow, token, expireEvery, maxAge, controlsEvery, controlAge,
-                batch, runTimeout, httpTimeout, attempts, port);
+        return new WorkerConfig(customers, sales, workflow, auth, token, expireEvery, maxAge, controlsEvery,
+                controlAge, salesGoalsEvery, batch, runTimeout, httpTimeout, attempts, port);
     }
 
     /** Reads one variable at a time and collects every problem, so all are shown together. */

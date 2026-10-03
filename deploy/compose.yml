@@ -11,11 +11,13 @@ services:
       CUSTOMERS_API_URL: http://customers-api:8080
       SALES_API_URL: http://sales-api:8080
       WORKFLOW_URL: http://workflow:8080
+      AUTH_API_URL: http://auth-api:8080
       SERVICE_TOKEN: ${SERVICE_TOKEN:?set SERVICE_TOKEN (service credential issued by the identity service)}
       EXPIRE_EVERY: ${EXPIRE_EVERY:-PT10M}
       PENDING_TTL: ${PENDING_TTL:-P3D}
       CONTROLS_EVERY: ${CONTROLS_EVERY:-PT6H}
       CONTROL_MAX_AGE: ${CONTROL_MAX_AGE:-P12M}
+      SALES_GOALS_EVERY: ${SALES_GOALS_EVERY:-PT1H}
       BATCH_SIZE: ${BATCH_SIZE:-50}
       RUN_TIMEOUT: ${RUN_TIMEOUT:-PT2M}
       HEALTH_PORT: 8080
