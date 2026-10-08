@@ -17,6 +17,7 @@ class WorkerConfigTest {
         env.put("CUSTOMERS_API_URL", "http://customers-api:8080");
         env.put("SALES_API_URL", "http://sales-api:8080");
         env.put("WORKFLOW_URL", "http://workflow:8080");
+        env.put("AUTH_API_URL", "http://auth-api:8080");
         env.put("SERVICE_TOKEN", "token");
         return env;
     }
@@ -31,6 +32,7 @@ class WorkerConfigTest {
         assertThat(config.httpAttempts()).isEqualTo(3);
         assertThat(config.quotationMaxAge()).isEqualTo(Duration.ofDays(3));
         assertThat(config.controlMaxAge()).isEqualTo(Period.ofMonths(12));
+        assertThat(config.salesGoalsEvery()).isEqualTo(Duration.ofHours(1));
         assertThat(config.healthPort()).isEqualTo(8080);
     }
 
