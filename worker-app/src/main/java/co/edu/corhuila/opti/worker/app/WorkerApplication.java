@@ -17,10 +17,13 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import co.edu.corhuila.opti.worker.adapter.in.health.HealthServer;
 import co.edu.corhuila.opti.worker.adapter.in.scheduler.JobScheduler;
 import co.edu.corhuila.opti.worker.adapter.in.scheduler.JobScheduler.Schedule;
+import co.edu.corhuila.opti.worker.adapter.out.auth.AuthHttpClient;
 import co.edu.corhuila.opti.worker.adapter.out.customers.CustomersHttpClient;
 import co.edu.corhuila.opti.worker.adapter.out.http.ApiClient;
 import co.edu.corhuila.opti.worker.adapter.out.http.RetryPolicy;
 import co.edu.corhuila.opti.worker.adapter.out.orders.OrdersHttpClient;
+import co.edu.corhuila.opti.worker.adapter.out.sales.SalesReportsHttpClient;
+import co.edu.corhuila.opti.worker.application.usecase.CheckSalesGoals;
 import co.edu.corhuila.opti.worker.application.usecase.ExpireStaleOrders;
 import co.edu.corhuila.opti.worker.application.usecase.FlagOverdueControls;
 
@@ -51,12 +54,16 @@ public final class WorkerApplication {
 
         var orders = new OrdersHttpClient(api, config.salesUrl(), config.workflowUrl());
         var patients = new CustomersHttpClient(api, config.customersUrl());
+        var sellers = new AuthHttpClient(api, config.authUrl());
+        var salesReports = new SalesReportsHttpClient(api, config.salesUrl());
 
         var scheduler = new JobScheduler(List.of(
                 new Schedule(new ExpireStaleOrders(orders, clock, config.quotationMaxAge(), config.batchSize()),
                         config.expireEvery()),
                 new Schedule(new FlagOverdueControls(patients, clock, config.controlMaxAge(), config.batchSize()),
-                        config.controlsEvery())),
+                        config.controlsEvery()),
+                new Schedule(new CheckSalesGoals(sellers, salesReports, clock, config.batchSize()),
+                        config.salesGoalsEvery())),
                 config.runTimeout(), clock);
         var health = new HealthServer(config.healthPort(), json, scheduler::lastRuns);
 
